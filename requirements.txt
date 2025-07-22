@@ -1,9 +1,5 @@
-flask==2.3.3
-gunicorn==21.2.0
-line-bot-sdk==3.5.0
-requests==2.31.0
-Pillow==10.4.0
-numpy==1.26.4
-torch>=1.8
-opencv-python
-aiohttp==3.8.5
+flask
+line-bot-sdk
+torch
+ultralytics
+Pillow
