@@ -1,57 +1,35 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage, FlexSendMessage
-from detect_yolo import predict_yolo
-from io import BytesIO
+from linebot.models import MessageEvent, ImageMessage, TextSendMessage
+from detect_skin import detect_skin_disease
 import os
+import tempfile
 
 app = Flask(__name__)
 
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+line_bot_api = LineBotApi("YOUR_CHANNEL_ACCESS_TOKEN")
+handler = WebhookHandler("YOUR_CHANNEL_SECRET")
 
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
-# ตัวอย่าง map class เป็นชื่อโรค (แก้ให้ตรงกับ model ของคุณ)
-CLASS_NAMES = {
-    0: "Melanoma",
-    1: "Nevus",
-    2: "Seborrheic Keratosis"
-}
-
-@app.route("/callback", methods=['POST'])
+@app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers.get('X-Line-Signature')
+    signature = request.headers["X-Line-Signature"]
     body = request.get_data(as_text=True)
 
     try:
         handler.handle(body, signature)
-    except InvalidSignatureError:
+    except Exception as e:
         abort(400)
-    return 'OK'
+
+    return "OK"
 
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image(event):
     message_content = line_bot_api.get_message_content(event.message.id)
-    image_bytes = BytesIO(message_content.content)
-    
-    predicted_class, confidence = predict_yolo(image_bytes)
-    
-    if predicted_class is not None:
-        label = CLASS_NAMES.get(predicted_class, "Unknown")
-        reply = f"ตรวจพบ: {label} (ความมั่นใจ {confidence*100:.2f}%)"
-    else:
-        reply = "ไม่พบวัตถุที่สามารถวิเคราะห์ได้ กรุณาลองใหม่อีกครั้ง"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tf:
+        for chunk in message_content.iter_content():
+            tf.write(chunk)
+        temp_path = tf.name
 
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-
-
-@app.route('/')
-def index():
-    return "Skin Cancer Detection LINE Bot is running."
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    result_text = detect_skin_disease(temp_path)
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result_text))
+    os.remove(temp_path)
