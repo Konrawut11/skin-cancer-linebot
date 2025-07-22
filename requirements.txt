@@ -1,7 +1,7 @@
 flask
 gunicorn
 line-bot-sdk
-torch
+torch>=1.7
 ultralytics
 Pillow
 opencv-python
