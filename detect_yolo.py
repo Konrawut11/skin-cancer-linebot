@@ -1,9 +1,11 @@
 import torch
 import numpy as np
 from PIL import Image
+from ultralytics import YOLO
+
 
 # โหลด model (โหลดแค่ครั้งเดียว)
-model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/best.pt', force_reload=False)
+model = YOLO("models/best.pt")
 
 def predict_yolo(image_bytes):
     """
