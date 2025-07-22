@@ -1,5 +1,7 @@
 flask
+gunicorn
 line-bot-sdk
 torch
 ultralytics
 Pillow
+opencv-python
