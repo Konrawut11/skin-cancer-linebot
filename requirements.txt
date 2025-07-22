@@ -1,7 +1,6 @@
 flask
 gunicorn
-line-bot-sdk
-torch>=1.7
-ultralytics
+ultralytics==8.2.27
+numpy>=1.20.0
 Pillow
-opencv-python
+line-bot-sdk
