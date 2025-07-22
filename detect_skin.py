@@ -3,7 +3,7 @@ from PIL import Image
 import torch
 
 # โหลดโมเดล
-model = YOLO("models/best.pt")
+model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/best.pt', force_reload=True)
 
 # ฟังก์ชันรับรูป (จาก path หรือ Image object) แล้วส่งผลลัพธ์เป็น label
 def detect_skin_disease(image_path):
