@@ -6,3 +6,4 @@ Pillow==10.4.0
 numpy==1.26.4
 torch>=1.8
 opencv-python
+aiohttp==3.8.5
