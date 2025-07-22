@@ -53,5 +53,5 @@ def index():
     return "Skin Cancer Detection LINE Bot is running."
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 8000))  # Render จะใช้ PORT จาก env
+    app.run(debug=False, host="0.0.0.0", port=port)
