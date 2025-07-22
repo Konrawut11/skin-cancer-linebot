@@ -1,14 +1,15 @@
+import os
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, ImageMessage, TextSendMessage
 from detect_skin import detect_skin_disease
-import os
 import tempfile
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi("YOUR_CHANNEL_ACCESS_TOKEN")
-handler = WebhookHandler("YOUR_CHANNEL_SECRET")
+# ใช้ ENV ที่ตั้งไว้ใน Render
+line_bot_api = LineBotApi(os.environ["CHANNEL_ACCESS_TOKEN"])
+handler = WebhookHandler(os.environ["CHANNEL_SECRET"])
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -30,6 +31,6 @@ def handle_image(event):
             tf.write(chunk)
         temp_path = tf.name
 
-    result_text = detect_skin_disease(temp_path)
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result_text))
+    result = detect_skin_disease(temp_path)
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result))
     os.remove(temp_path)
