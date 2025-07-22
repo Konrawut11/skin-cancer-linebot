@@ -8,8 +8,8 @@ import os
 
 app = Flask(__name__)
 
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv('twViaoWkg+T8rPjh5ngDKzR40GjAFnQ3zcfCyfPP2TfRi/cqItvI9j9M2zdYTV4VHjXwl2OIn8NS+PtS/mR/iELmxvJfv29CygKJ4NzsyHjMyd9E1WPL9Am877y3hD8+vT811+nrcxithpfz2Q3OgQdB04t89/1O/w1cDnyilFU=')
-LINE_CHANNEL_SECRET = os.getenv('ec6b40811e14d9155f0d28ffdd876ad9')
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
