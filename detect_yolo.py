@@ -7,6 +7,10 @@ from ultralytics import YOLO
 # โหลด model (โหลดแค่ครั้งเดียว)
 model = YOLO("models/best.pt")
 
+@app.route("/")
+def index():
+    return "OK"
+
 def predict_yolo(image_bytes):
     """
     รับ bytes ของภาพ, ใช้ YOLOv5 predict class และ confidence
