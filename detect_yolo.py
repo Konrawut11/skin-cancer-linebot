@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
+from io import BytesIO
 from ultralytics import YOLO
 
 
@@ -12,23 +13,17 @@ def index():
     return "OK"
 
 def predict_yolo(image_bytes):
-    """
-    รับ bytes ของภาพ, ใช้ YOLOv5 predict class และ confidence
-    """
     try:
-        img = Image.open(image_bytes)
-        results = model(img, size=640)  # ปรับขนาด input ถ้าต้องการ
-        # results.print()  # แสดงผลใน console (debug)
+        img = Image.open(BytesIO(image_bytes))  # ✅ ใช้ BytesIO
+        results = model(img, size=640)
 
-        # ดึง class ที่ detect ออกมา
-        pred = results.pred[0]  # tensor [n,6] columns: x1,y1,x2,y2,conf,class
+        pred = results.pred[0]
         if pred.shape[0] == 0:
-            return None, 0.0  # ไม่พบอะไรเลย
+            return None, 0.0
 
-        # หา class ที่ confidence สูงสุด
-        best_idx = pred[:,4].argmax()
-        best_conf = float(pred[best_idx,4])
-        best_class = int(pred[best_idx,5])
+        best_idx = pred[:, 4].argmax()
+        best_conf = float(pred[best_idx, 4])
+        best_class = int(pred[best_idx, 5])
 
         return best_class, best_conf
 
