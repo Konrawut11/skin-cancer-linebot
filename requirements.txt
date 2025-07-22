@@ -4,3 +4,5 @@ line-bot-sdk==3.5.0
 requests==2.31.0
 Pillow==10.4.0
 numpy==1.26.4
+torch>=1.8
+opencv-python
