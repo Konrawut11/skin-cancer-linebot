@@ -1,10 +1,13 @@
+# Core web framework
 flask
 line-bot-sdk
-torch
-torchvision
-ultralytics
-opencv-python-headless
+
+# Image processing only (ไม่ใช้ ML ตอนนี้)
 Pillow
 numpy
+
+# Utilities
 requests
+
+# Production server
 gunicorn
