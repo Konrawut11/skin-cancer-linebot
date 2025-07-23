@@ -1,19 +1,10 @@
-# Flask และ LINE Bot SDK
-flask==2.3.3
-line-bot-sdk==3.5.0
-
-# Machine Learning และ Computer Vision - ใช้ version ใหม่ที่มีจริง
-torch==2.7.1
-torchvision==0.19.1
-ultralytics==8.3.39
-opencv-python-headless==4.10.0.84
-
-# Image Processing
-Pillow==11.0.0
-numpy==1.26.4
-
-# Utilities
-requests==2.32.3
-
-# Production WSGI Server
-gunicorn==23.0.0
+flask
+line-bot-sdk
+torch
+torchvision
+ultralytics
+opencv-python-headless
+Pillow
+numpy
+requests
+gunicorn
