@@ -1,13 +1,6 @@
-# Core web framework
-flask
-line-bot-sdk
-
-# Image processing only (ไม่ใช้ ML ตอนนี้)
-Pillow
+torch
+ultralytics
+pillow
 numpy
-
-# Utilities
-requests
-
-# Production server
-gunicorn
+flask
+line-bot-sdk==2.4.2
