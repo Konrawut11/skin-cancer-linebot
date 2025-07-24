@@ -34,13 +34,32 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # โหลด YOLOv5 model
 MODEL_PATH = 'models/best.pt'
+MODEL_URL = os.getenv('MODEL_URL')
+
+# โหลดโมเดลจาก URL หากยังไม่มีไฟล์
+if not os.path.exists(MODEL_PATH):
+    try:
+        if MODEL_URL:
+            os.makedirs('models', exist_ok=True)
+            logger.info(f"Downloading model from {MODEL_URL}")
+            response = requests.get(MODEL_URL)
+            response.raise_for_status()
+            with open(MODEL_PATH, 'wb') as f:
+                f.write(response.content)
+            logger.info("Model downloaded successfully")
+        else:
+            logger.warning("MODEL_URL not provided")
+    except Exception as e:
+        logger.error(f"Error downloading model: {e}")
+
+# โหลด YOLO model
 try:
     if os.path.exists(MODEL_PATH):
         model = YOLO(MODEL_PATH)
         logger.info("Model loaded successfully")
     else:
-        logger.warning(f"Model file not found at {MODEL_PATH}, using YOLOv5s")
-        model = YOLO('yolov5s.pt')  # fallback model
+        model = None
+        logger.warning("Model file not found after download attempt")
 except Exception as e:
     logger.error(f"Error loading model: {e}")
     model = None
