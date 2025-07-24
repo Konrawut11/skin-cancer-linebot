@@ -129,17 +129,16 @@ def create_result_message(prediction_result):
 
 @app.route("/webhook", methods=['POST'])
 def callback():
-    """Webhook สำหรับรับข้อความจาก LINE"""
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-    
+
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         logger.error("Invalid signature")
         abort(400)
-    
-    return 'OK'
+
+    return 'OK', 200  # <<< ตรงนี้สำคัญ
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
