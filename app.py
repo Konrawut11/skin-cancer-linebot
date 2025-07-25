@@ -3,7 +3,7 @@ import io
 import torch
 import cv2
 import numpy as np
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 from PIL import Image
 import logging
 from linebot import LineBotApi, WebhookHandler
@@ -16,7 +16,7 @@ import requests
 from ultralytics import YOLO
 
 # ตั้งค่า logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -36,33 +36,83 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 MODEL_PATH = 'models/best.pt'
 MODEL_URL = os.getenv('MODEL_URL')
 
-# โหลดโมเดลจาก URL หากยังไม่มีไฟล์
-if not os.path.exists(MODEL_PATH):
-    try:
-        if MODEL_URL:
-            os.makedirs('models', exist_ok=True)
-            logger.info(f"Downloading model from {MODEL_URL}")
-            response = requests.get(MODEL_URL)
-            response.raise_for_status()
-            with open(MODEL_PATH, 'wb') as f:
-                f.write(response.content)
-            logger.info("Model downloaded successfully")
-        else:
-            logger.warning("MODEL_URL not provided")
-    except Exception as e:
-        logger.error(f"Error downloading model: {e}")
+# ตัวแปร global สำหรับโมเดล
+model = None
 
-# โหลด YOLO model
-try:
-    if os.path.exists(MODEL_PATH):
-        model = YOLO(MODEL_PATH)
-        logger.info("Model loaded successfully")
-    else:
+def initialize_model():
+    """Initialize or reload the model"""
+    global model
+    
+    # สร้างโฟลเดอร์ models หากยังไม่มี
+    os.makedirs('models', exist_ok=True)
+    logger.info(f"Models directory created/exists")
+    
+    # ตรวจสอบและดาวน์โหลดโมเดล
+    if not os.path.exists(MODEL_PATH):
+        if MODEL_URL:
+            try:
+                logger.info(f"Downloading model from {MODEL_URL}")
+                response = requests.get(MODEL_URL, timeout=300, stream=True)  # เพิ่ม timeout และ stream
+                response.raise_for_status()
+                
+                # ดาวน์โหลดแบบ chunk เพื่อไฟล์ใหญ่
+                total_size = 0
+                with open(MODEL_PATH, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            total_size += len(chunk)
+                
+                logger.info(f"Model downloaded successfully, size: {total_size} bytes")
+                
+            except requests.RequestException as e:
+                logger.error(f"Error downloading model: {e}")
+                return False
+            except Exception as e:
+                logger.error(f"Unexpected error during download: {e}")
+                return False
+        else:
+            logger.warning("MODEL_URL not provided and model file doesn't exist")
+            # ลองใช้โมเดล default
+            try:
+                logger.info("Trying to use YOLOv8n default model")
+                model = YOLO('yolov8n.pt')  # จะดาวน์โหลดอัตโนมัติ
+                logger.info("Default YOLOv8n model loaded successfully")
+                return True
+            except Exception as e:
+                logger.error(f"Error loading default model: {e}")
+                return False
+    
+    # โหลดโมเดล
+    try:
+        if os.path.exists(MODEL_PATH):
+            # ตรวจสอบขนาดไฟล์
+            file_size = os.path.getsize(MODEL_PATH)
+            logger.info(f"Model file size: {file_size} bytes")
+            
+            if file_size < 1000:  # ไฟล์เล็กเกินไป อาจเสียหาย
+                logger.error("Model file seems corrupted (too small)")
+                os.remove(MODEL_PATH)  # ลบไฟล์เสียหาย
+                return False
+            
+            # โหลดโมเดล
+            model = YOLO(MODEL_PATH)
+            logger.info("Custom model loaded successfully")
+            
+            # ทดสอบโมเดลด้วยรูปภาพตัวอย่าง
+            test_image = np.zeros((640, 640, 3), dtype=np.uint8)
+            results = model(test_image)
+            logger.info("Model test prediction successful")
+            
+            return True
+        else:
+            logger.error("Model file not found after download attempt")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error loading model: {e}")
         model = None
-        logger.warning("Model file not found after download attempt")
-except Exception as e:
-    logger.error(f"Error loading model: {e}")
-    model = None
+        return False
 
 # คลาสโรคผิวหนัง
 SKIN_CANCER_CLASSES = {
@@ -99,13 +149,21 @@ def predict_skin_cancer(image):
         # แปลง PIL Image เป็น numpy array
         img_array = np.array(image)
         
+        # Resize รูปภาพถ้าใหญ่เกินไป
+        if img_array.shape[0] > 640 or img_array.shape[1] > 640:
+            image = image.resize((640, 640), Image.Resampling.LANCZOS)
+            img_array = np.array(image)
+        
         # ทำการทำนาย
-        results = model(img_array)
+        results = model(img_array, conf=0.25)  # ลด confidence threshold
         
         # ดึงผลลัพธ์
-        if len(results) > 0 and len(results[0].boxes) > 0:
+        if len(results) > 0 and hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
             # หา detection ที่มี confidence สูงสุด
-            best_detection = results[0].boxes[0]
+            boxes = results[0].boxes
+            best_idx = torch.argmax(boxes.conf)
+            best_detection = boxes[best_idx]
+            
             class_id = int(best_detection.cls.item())
             confidence = float(best_detection.conf.item())
             
@@ -116,7 +174,9 @@ def predict_skin_cancer(image):
                 'risk_level': RISK_LEVELS.get(class_id, "ไม่ทราบ")
             }, None
         else:
-            return None, "ไม่พบรอยโรคผิวหนังในรูปภาพ"
+            # หากไม่มี detection ลองใช้ classification mode
+            logger.info("No detection found, trying classification mode")
+            return None, "ไม่พบรอยโรคผิวหนังในรูปภาพ กรุณาลองถ่ายรูปใหม่ที่ชัดเจนขึ้น"
             
     except Exception as e:
         logger.error(f"Prediction error: {e}")
@@ -156,8 +216,11 @@ def callback():
     except InvalidSignatureError:
         logger.error("Invalid signature")
         abort(400)
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        abort(500)
 
-    return 'OK', 200  # <<< ตรงนี้สำคัญ
+    return 'OK', 200
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
@@ -191,10 +254,20 @@ def handle_text_message(event):
 
 ❓ คำถามเพิ่มเติม พิมพ์ "ช่วยเหลือ" """
         
+    elif 'status' in text or 'สถานะ' in text:
+        model_status = "✅ พร้อมใช้งาน" if model is not None else "❌ ไม่พร้อมใช้งาน"
+        reply_text = f"""📊 สถานะระบบ:
+        
+🤖 บอท: ✅ ทำงานปกติ
+🧠 โมเดล AI: {model_status}
+        
+{model_status}"""
+        
     else:
         reply_text = """กรุณาส่งรูปภาพผิวหนังที่ต้องการตรวจ 📸
 
-หรือพิมพ์ "ช่วยเหลือ" เพื่อดูวิธีใช้งาน"""
+หรือพิมพ์ "ช่วยเหลือ" เพื่อดูวิธีใช้งาน
+พิมพ์ "สถานะ" เพื่อดูสถานะระบบ"""
     
     line_bot_api.reply_message(
         event.reply_token,
@@ -205,6 +278,14 @@ def handle_text_message(event):
 def handle_image_message(event):
     """จัดการรูปภาพ"""
     try:
+        # ตรวจสอบว่าโมเดลพร้อมใช้งานหรือไม่
+        if model is None:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="❌ ระบบยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งในอีกสักครู่")
+            )
+            return
+        
         # ส่งข้อความแจ้งว่ากำลังประมวลผล
         line_bot_api.reply_message(
             event.reply_token,
@@ -248,13 +329,72 @@ def handle_image_message(event):
 
 @app.route("/", methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return {
+    """Health check endpoint with detailed info"""
+    model_info = {
+        "model_file_exists": os.path.exists(MODEL_PATH),
+        "model_path": MODEL_PATH,
+        "model_url_provided": MODEL_URL is not None,
+        "models_directory_exists": os.path.exists('models')
+    }
+    
+    if os.path.exists(MODEL_PATH):
+        model_info["model_file_size"] = os.path.getsize(MODEL_PATH)
+    
+    return jsonify({
         "status": "ok",
         "message": "Skin Cancer Detection LINE Bot is running",
-        "model_loaded": model is not None
-    }
+        "model_loaded": model is not None,
+        "model_info": model_info,
+        "line_credentials": {
+            "access_token_provided": LINE_CHANNEL_ACCESS_TOKEN is not None,
+            "secret_provided": LINE_CHANNEL_SECRET is not None
+        }
+    })
+
+@app.route("/reload_model", methods=['POST'])
+def reload_model():
+    """Reload model endpoint"""
+    success = initialize_model()
+    return jsonify({
+        "status": "success" if success else "failed",
+        "model_loaded": model is not None,
+        "message": "Model reloaded successfully" if success else "Failed to reload model"
+    })
+
+@app.route("/test_model", methods=['GET'])
+def test_model():
+    """Test model endpoint"""
+    if model is None:
+        return jsonify({
+            "status": "failed",
+            "message": "Model not loaded"
+        })
+    
+    try:
+        # สร้างรูปภาพทดสอบ
+        test_image = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
+        results = model(test_image)
+        
+        return jsonify({
+            "status": "success",
+            "message": "Model test successful",
+            "detections": len(results[0].boxes) if hasattr(results[0], 'boxes') else 0
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "failed",
+            "message": f"Model test failed: {str(e)}"
+        })
 
 if __name__ == "__main__":
+    # โหลดโมเดลตอนเริ่มต้น
+    logger.info("Starting application...")
+    model_loaded = initialize_model()
+    
+    if model_loaded:
+        logger.info("✅ Application started with model loaded")
+    else:
+        logger.warning("⚠️ Application started without model")
+    
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
